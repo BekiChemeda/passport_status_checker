@@ -12,7 +12,7 @@ start.register_handlers(bot)
 check_status.register_handlers(bot)
 admin.register_handlers(bot)
 
-app = Flask(__name__)
+
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ["new_passport", "renew_passport"])
@@ -75,7 +75,7 @@ def about_handler(call):
     markup.add(InlineKeyboardButton("🏠 Back to Home", callback_data="go_home"))
 
     bot.send_message(call.message.chat.id, about_text, parse_mode="Markdown", reply_markup=markup)
-
+app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def webhook():
     json_str = request.get_data().decode('utf-8')
