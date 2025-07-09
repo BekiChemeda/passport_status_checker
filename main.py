@@ -79,14 +79,23 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST', 'HEAD'])
 def webhook():
     if request.method == 'HEAD':
-        return '', 200  # Respond empty body but valid status
-    elif request.method == 'GET':
-        return '✅ Passport Bot is Running', 200
-    elif request.method == 'POST':
-        json_str = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-        return 'OK', 200
+        return '', 200
+
+    if request.method == 'GET':
+        return '✅ Passport Bot is Running!', 200
+
+    if request.method == 'POST':
+        try:
+            json_str = request.get_data().decode('utf-8')
+            print(f"📩 Incoming POST update:\n{json_str}")  # Show the raw update
+
+            update = telebot.types.Update.de_json(json_str)
+            bot.process_new_updates([update])
+            print("✅ Update processed successfully")
+            return 'OK', 200
+        except Exception as e:
+            print(f"❌ Error processing update: {e}")
+            return 'Internal Server Error', 500
 
 if __name__ == "__main__":
     
