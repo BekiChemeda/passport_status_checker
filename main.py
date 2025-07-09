@@ -84,7 +84,7 @@ def webhook():
     return 'OK', 200
 
 if __name__ == "__main__":
-    # Replace this with your actual webhook URL:
+    
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
     bot.remove_webhook()
     bot.set_webhook()
