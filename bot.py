@@ -346,9 +346,7 @@ def close_admin_panel(call):
         pass  # Ignore if message already deleted or can't delete
     show_main_menu(bot,call.message.chat.id)
 
-bot.remove_webhook()
 
-bot.set_webhook(url=WEBHOOK_URL)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -360,10 +358,16 @@ def webhook():
         print(f"Error in webhook: {e}")
     return '', 200
 
-@app.route('/')
-def index():
-    return "Bot is running!"
+@app.route('/', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    
+    bot.remove_webhook()
+    bot.set_webhook(url=WEBHOOK_URL)
+    print("Webhook set. Flask server running...")
+    app.run(host="0.0.0.0", port=10000)
