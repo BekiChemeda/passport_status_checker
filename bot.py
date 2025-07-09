@@ -15,8 +15,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 lang = "en"
 
 
-app = Flask(__name__)
-
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
@@ -348,16 +346,7 @@ def close_admin_panel(call):
 
 
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    try:
-        json_str = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-    except Exception as e:
-        print(f"Error in webhook: {e}")
-    return '', 200
-
+app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def webhook():
     json_str = request.get_data().decode('utf-8')
@@ -367,7 +356,8 @@ def webhook():
 
 if __name__ == "__main__":
     
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
     bot.remove_webhook()
-    bot.set_webhook(url=WEBHOOK_URL)
+    bot.set_webhook()
     print("Webhook set. Flask server running...")
     app.run(host="0.0.0.0", port=10000)
