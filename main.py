@@ -6,7 +6,6 @@ from handlers import start, check_status, admin
 from utils.database import users_col
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 bot = telebot.TeleBot(BOT_TOKEN)
 lang = "en"
 start.register_handlers(bot)
@@ -76,24 +75,18 @@ def about_handler(call):
     markup.add(InlineKeyboardButton("🏠 Back to Home", callback_data="go_home"))
 
     bot.send_message(call.message.chat.id, about_text, parse_mode="Markdown", reply_markup=markup)
-bot.remove_webhook()
 
-bot.set_webhook(url=WEBHOOK_URL)
-
-@app.route('/webhook', methods=['POST'])
+@app.route('/', methods=['POST'])
 def webhook():
-    try:
-        json_str = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-    except Exception as e:
-        print(f"Error in webhook: {e}")
-    return '', 200
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
 
-@app.route('/')
-def index():
-    return "Bot is running!"
-
-if __name__ == '__main__':
-    port = int(os.environ['PORT'])  # No fallback
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    # Replace this with your actual webhook URL:
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    bot.remove_webhook()
+    bot.set_webhook()
+    print("Webhook set. Flask server running...")
+    app.run(host="0.0.0.0", port=10000)
