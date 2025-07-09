@@ -76,10 +76,12 @@ def about_handler(call):
 
     bot.send_message(call.message.chat.id, about_text, parse_mode="Markdown", reply_markup=markup)
 app = Flask(__name__)
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'POST', 'HEAD'])
 def webhook():
-    if request.method == 'GET':
-        return '🚀 Passport checker Bot is Running', 200
+    if request.method == 'HEAD':
+        return '', 200  # Respond empty body but valid status
+    elif request.method == 'GET':
+        return '✅ Passport Bot is Running', 200
     elif request.method == 'POST':
         json_str = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_str)
