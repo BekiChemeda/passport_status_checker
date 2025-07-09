@@ -8,12 +8,12 @@ from utils.database import users_col
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
 lang = "en"
 start.register_handlers(bot)
 check_status.register_handlers(bot)
 admin.register_handlers(bot)
 
+app = Flask(__name__)
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ["new_passport", "renew_passport"])
