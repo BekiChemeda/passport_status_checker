@@ -75,34 +75,34 @@ def about_handler(call):
     markup.add(InlineKeyboardButton("🏠 Back to Home", callback_data="go_home"))
 
     bot.send_message(call.message.chat.id, about_text, parse_mode="Markdown", reply_markup=markup)
-# app = Flask(__name__)
-# @app.route('/', methods=['GET', 'POST', 'HEAD'])
-# def webhook():
-#     if request.method == 'HEAD':
-#         return '', 200
+app = Flask(__name__)
+@app.route('/', methods=['GET', 'POST', 'HEAD'])
+def webhook():
+    if request.method == 'HEAD':
+        return '', 200
 
-#     if request.method == 'GET':
-#         return '✅ Passport Bot is Running!', 200
+    if request.method == 'GET':
+        return '✅ Passport Bot is Running!', 200
 
-#     if request.method == 'POST':
-#         try:
-#             json_str = request.get_data().decode('utf-8')
-#             print(f"📩 Incoming POST update:\n{json_str}")  # Show the raw update
+    if request.method == 'POST':
+        try:
+            json_str = request.get_data().decode('utf-8')
+            print(f"📩 Incoming POST update:\n{json_str}")  # Show the raw update
 
-#             update = telebot.types.Update.de_json(json_str)
-#             bot.process_new_updates([update])
-#             print("✅ Update processed successfully")
-#             return 'OK', 200
-#         except Exception as e:
-#             print(f"❌ Error processing update: {e}")
-#             return 'Internal Server Error', 500
+            update = telebot.types.Update.de_json(json_str)
+            bot.process_new_updates([update])
+            print("✅ Update processed successfully")
+            return 'OK', 200
+        except Exception as e:
+            print(f"❌ Error processing update: {e}")
+            return 'Internal Server Error', 500
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
     
-#     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-#     bot.remove_webhook()
-#     bot.set_webhook(f"{WEBHOOK_URL}/")
-#     print("Webhook set. Flask server running...")
-#     app.run(host="0.0.0.0", port=10000)
-bot.infinity_polling()
-print("bot is running...")
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    bot.remove_webhook()
+    bot.set_webhook(f"{WEBHOOK_URL}/")
+    print("Webhook set. Flask server running...")
+    app.run(host="0.0.0.0", port=10000)
+# bot.infinity_polling()
+# print("bot is running...")
