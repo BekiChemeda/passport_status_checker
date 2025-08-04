@@ -133,8 +133,8 @@ def process_remove_channel(message):
     except:
         bot.reply_to(message, "❌ Invalid number.")
 
-# Run the bot
-bot.infinity_polling()
+
+
 @bot.callback_query_handler(func=lambda call: call.data in ["new_passport", "renew_passport"])
 def passport_service_info(call):
     try:
