@@ -34,8 +34,45 @@ def is_member(channel_username, user_id):
     except:
         return False
 
+
+users = []
+
+def user_exists(user_id):
+    return any(u['user_id'] == user_id for u in users)
+
+def add_user(user):
+    users.append({
+        'user_id': user.id,
+        'username': user.username,
+        'joinedAt': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    })
+
+@bot.message_handler(commands=['admin_stats'])
+def admin_stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    total = len(users)
+    bot.send_message(ADMIN_ID, f"📊 Total users: {total}")
+
+@bot.message_handler(commands=['admin_stats_json'])
+def admin_stats_json(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    # Prepare JSON string
+    data_json = json.dumps(users, indent=2)
+    # Save to a temp file
+    with open("users.json", "w", encoding="utf-8") as f:
+        f.write(data_json)
+    # Send JSON file
+    with open("users.json", "rb") as f:
+        bot.send_document(ADMIN_ID, f)
+
+
 @bot.message_handler(commands=['start'])
 def handle_start(message):
+     user = message.from_user
+    if not user_exists(user.id):
+        add_user(user)
     user_id = message.from_user.id
      # Get channels not yet joined
     not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
@@ -81,6 +118,7 @@ def handle_start(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == "go_home")
 def go_home_callback(call):
+    user_id = call.from_user.id
     not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
 
     if not_joined:
