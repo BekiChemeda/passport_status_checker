@@ -70,7 +70,7 @@ def admin_stats_json(message):
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-     user = message.from_user
+    user = message.from_user
     if not user_exists(user.id):
         add_user(user)
     user_id = message.from_user.id
