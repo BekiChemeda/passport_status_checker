@@ -173,8 +173,8 @@ def get_ref_input(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
-        lang = user.get("language", "en")
+        # user = users_col.find_one({"userId": call.from_user.id})
+        lang = "en"
         msg = bot.send_message(call.message.chat.id, "🔢 Please send your tracking reference code:\n E.x AAL1234567 ")
         bot.register_next_step_handler(msg, process_tracking_code, lang)
 
@@ -212,9 +212,9 @@ def ask_branch(msg, lang):
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("branch|"))
 def handle_branch_selection(call):
-        # _, full_name, branch = call.data.split("|", 2)
+        _, full_name, branch = call.data.split("|", 2)
         # user = users_col.find_one({"userId": call.from_user.id})
-        # lang = user.get("language", "en")
+        lang = "en"
         result = check_by_fullname(full_name, branch, lang)
         bot.send_message(call.message.chat.id, result,parse_mode="MarkdownV2", reply_markup=get_main_menu_button())
 
