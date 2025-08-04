@@ -23,8 +23,7 @@ ADMIN_ID = 1263404935
 # In-memory list of channels
 # Each item: {'name': 'Channel Name', 'username': '@channelusername'}
 channels = [
-    {'name': 'Our Channel', 'username': '@yourchannel'},
-    {'name': 'Sponsor Channel', 'username': '@sponsorchannel'}
+    
 ]
 
 # Check if user is member
