@@ -68,6 +68,20 @@ def admin_stats_json(message):
     with open("users.json", "rb") as f:
         bot.send_document(ADMIN_ID, f)
 
+@bot.message_handler(commands=['commands'])
+def admin_commands(message):
+    if message.from_user.id != ADMIN_ID:
+        return  # silently ignore or send a no-permission message if you want
+    
+    commands_text = (
+        "🛠️ *Admin Commands*\n\n"
+        "/admin_add_channel - Add a new channel\n"
+        "/admin_remove_channel - Remove a channel\n"
+        "/admin_stats - Show total users count\n"
+        "/admin_stats_json - Get JSON file of users data\n"
+        "/commands - Show this command list\n"
+    )
+    bot.send_message(message.chat.id, commands_text, parse_mode='Markdown')
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
@@ -81,10 +95,10 @@ def handle_start(message):
     if not_joined:
         markup = InlineKeyboardMarkup(row_width=1)
         for ch in not_joined:
-            btn = InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
+            btn = InlineKeyboardButton(f"📢 {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
             markup.add(btn)
         markup.add(InlineKeyboardButton("✅ Done", callback_data="go_home"))
-        bot.send_message(user_id, "🚨 Please join the following channels to continue:", reply_markup=markup)
+        bot.send_message(user_id, "🚨 You have to be a member of the following channels to use this bot:", reply_markup=markup)
     else:
         try:
             bot.delete_message(message.message.chat.id, message.message.message_id)
