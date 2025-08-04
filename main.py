@@ -26,6 +26,7 @@ def handle_start(message):
     except Exception:
         pass
     user_id = message.from_user.id
+    
     # user = users_col.find_one({"userId": user_id})
 
     # if not user:
@@ -47,7 +48,7 @@ def handle_start(message):
     #     markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
     #     bot.send_message(user_id, text, reply_markup=markup)
     #     return
-    show_main_menu(bot, user_id, user)
+    show_main_menu(bot, user_id)
     # print(user)
 
 
