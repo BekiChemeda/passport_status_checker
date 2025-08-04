@@ -3,9 +3,9 @@ import os
 from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from handlers import start, check_status, admin
-from utils.database import users_col
+# from utils.database import users_col
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils.database import users_col, settings_col
+# from utils.database import users_col, settings_col
 from utils.decorators import admin_only
 from utils.passport_api import check_by_reference, check_by_fullname
 from dotenv import load_dotenv
@@ -26,27 +26,27 @@ def handle_start(message):
     except Exception:
         pass
     user_id = message.from_user.id
-    user = users_col.find_one({"userId": user_id})
+    # user = users_col.find_one({"userId": user_id})
 
-    if not user:
-        users_col.insert_one({
-            "userId": user_id,
-            "first_name": message.from_user.first_name,
-            "username": message.from_user.username,
-            "role": "user"
-        })
-    user = users_col.find_one({"userId": user_id})
+    # if not user:
+    #     users_col.insert_one({
+    #         "userId": user_id,
+    #         "first_name": message.from_user.first_name,
+    #         "username": message.from_user.username,
+    #         "role": "user"
+    #     })
+    # user = users_col.find_one({"userId": user_id})
 
-    settings = settings_col.find_one()
-    if settings and settings.get("force_subscription"):
-        joined_all = True
-        text = "🚫 Please join all channels to use the bot."
-        markup = InlineKeyboardMarkup()
-        for ch in settings.get("channels", []):
-            markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
-        markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
-        bot.send_message(user_id, text, reply_markup=markup)
-        return
+    # settings = settings_col.find_one()
+    # if settings and settings.get("force_subscription"):
+    #     joined_all = True
+    #     text = "🚫 Please join all channels to use the bot."
+    #     markup = InlineKeyboardMarkup()
+    #     for ch in settings.get("channels", []):
+    #         markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
+    #     markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
+    #     bot.send_message(user_id, text, reply_markup=markup)
+    #     return
     show_main_menu(bot, user_id, user)
     # print(user)
 
@@ -135,8 +135,8 @@ def show_main_menu(bot, chat_id, user=None):
         InlineKeyboardButton("🆕 New Passport Registration", callback_data="new_passport"),
         InlineKeyboardButton("♻️ Passport Renewal", callback_data="renew_passport")
     )
-    if user and user.get("role") == "admin":
-        markup.add(InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel"))
+    # if user and user.get("role") == "admin":
+    #     markup.add(InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel"))
 
     bot.send_message(chat_id, f"""👋 Welcome to the Ethiopian Passport Status Bot!
 
@@ -154,8 +154,8 @@ def handle_check_status(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
-        lang = user.get("language", "en")
+        # user = users_col.find_one({"userId": call.from_user.id})
+        # lang = user.get("language", "en")
 
         markup = InlineKeyboardMarkup()
         markup.add(
@@ -190,8 +190,8 @@ def get_fullname_input(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    user = users_col.find_one({"userId": call.from_user.id})
-    lang = user.get("language", "en")
+    # user = users_col.find_one({"userId": call.from_user.id})
+    # lang = user.get("language", "en")
     msg = bot.send_message(call.message.chat.id, "🧑‍🦱 Enter your full name (Name Father Grandfather):")
     bot.register_next_step_handler(msg, ask_branch, lang)
 
@@ -211,9 +211,9 @@ def ask_branch(msg, lang):
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("branch|"))
 def handle_branch_selection(call):
-        _, full_name, branch = call.data.split("|", 2)
-        user = users_col.find_one({"userId": call.from_user.id})
-        lang = user.get("language", "en")
+        # _, full_name, branch = call.data.split("|", 2)
+        # user = users_col.find_one({"userId": call.from_user.id})
+        # lang = user.get("language", "en")
         result = check_by_fullname(full_name, branch, lang)
         bot.send_message(call.message.chat.id, result,parse_mode="MarkdownV2", reply_markup=get_main_menu_button())
 
