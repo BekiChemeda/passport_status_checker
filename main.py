@@ -17,50 +17,124 @@ lang = "en"
 
 
 # app = Flask(__name__)
+ADMIN_ID = 1263404935
 
+# In-memory list of channels
+# Each item: {'name': 'Channel Name', 'username': '@channelusername'}
+channels = [
+    {'name': 'Our Channel', 'username': '@yourchannel'},
+    {'name': 'Sponsor Channel', 'username': '@sponsorchannel'}
+]
+
+# Check if user is member
+def is_member(channel_username, user_id):
+    try:
+        member = bot.get_chat_member(channel_username, user_id)
+        return member.status in ['member', 'administrator', 'creator']
+    except:
+        return False
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    try:
-        bot.delete_message(message.message.chat.id, message.message.message_id)
-    except Exception:
-        pass
-    user_id = message.from_user.id
+     # Get channels not yet joined
+    not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
+
+    if not_joined:
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        for ch in not_joined:
+            btn = types.InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
+            markup.add(btn)
+        markup.add(types.InlineKeyboardButton("✅ Done", callback_data="go_home"))
+        bot.send_message(user_id, "🚨 Please join the following channels to continue:", reply_markup=markup)
+    else:
+        try:
+            bot.delete_message(message.message.chat.id, message.message.message_id)
+        except Exception:
+            pass
+        user_id = message.from_user.id
+        
+        # user = users_col.find_one({"userId": user_id})
     
-    # user = users_col.find_one({"userId": user_id})
-
-    # if not user:
-    #     users_col.insert_one({
-    #         "userId": user_id,
-    #         "first_name": message.from_user.first_name,
-    #         "username": message.from_user.username,
-    #         "role": "user"
-    #     })
-    # user = users_col.find_one({"userId": user_id})
-
-    # settings = settings_col.find_one()
-    # if settings and settings.get("force_subscription"):
-    #     joined_all = True
-    #     text = "🚫 Please join all channels to use the bot."
-    #     markup = InlineKeyboardMarkup()
-    #     for ch in settings.get("channels", []):
-    #         markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
-    #     markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
-    #     bot.send_message(user_id, text, reply_markup=markup)
-    #     return
-    show_main_menu(bot, user_id)
-    # print(user)
+        # if not user:
+        #     users_col.insert_one({
+        #         "userId": user_id,
+        #         "first_name": message.from_user.first_name,
+        #         "username": message.from_user.username,
+        #         "role": "user"
+        #     })
+        # user = users_col.find_one({"userId": user_id})
+    
+        # settings = settings_col.find_one()
+        # if settings and settings.get("force_subscription"):
+        #     joined_all = True
+        #     text = "🚫 Please join all channels to use the bot."
+        #     markup = InlineKeyboardMarkup()
+        #     for ch in settings.get("channels", []):
+        #         markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
+        #     markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
+        #     bot.send_message(user_id, text, reply_markup=markup)
+        #     return
+        show_main_menu(bot, user_id)
+        # print(user)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "go_home")
 def go_home_callback(call):
+    not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
+
+    if not_joined:
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        for ch in not_joined:
+            btn = types.InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
+            markup.add(btn)
+        markup.add(types.InlineKeyboardButton("✅ Done", callback_data="go_home"))
+        bot.send_message(user_id, "🚨 Please join the following channels to continue:", reply_markup=markup)
+    else:
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except Exception:
+            pass
+        show_main_menu(bot, call.message.chat.id)
+
+# Admin: add channel
+@bot.message_handler(commands=['admin_add_channel'])
+def add_channel_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        return bot.reply_to(message, "🚫 Not authorized.")
+
+    msg = bot.reply_to(message, "Send the channel display name and username like this:\n\n`Channel Name | @channelusername`", parse_mode="Markdown")
+    bot.register_next_step_handler(msg, process_add_channel)
+
+def process_add_channel(message):
     try:
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
-    show_main_menu(bot, call.message.chat.id)
+        name, username = map(str.strip, message.text.split("|"))
+        if not username.startswith("@"):
+            return bot.reply_to(message, "❌ Username must start with @")
+        channels.append({'name': name, 'username': username})
+        bot.reply_to(message, f"✅ Channel `{name}` added.", parse_mode="Markdown")
+    except:
+        bot.reply_to(message, "❌ Format invalid. Use `Channel Name | @channelusername`", parse_mode="Markdown")
 
+# Admin: remove channel
+@bot.message_handler(commands=['admin_remove_channel'])
+def remove_channel_handler(message):
+    if message.from_user.id != ADMIN_ID:
+        return bot.reply_to(message, "🚫 Not authorized.")
 
+    text = "\n".join([f"{i+1}. {ch['name']} ({ch['username']})" for i, ch in enumerate(channels)])
+    msg = bot.reply_to(message, f"Send the number of the channel to remove:\n\n{text}")
+    bot.register_next_step_handler(msg, process_remove_channel)
+
+def process_remove_channel(message):
+    try:
+        index = int(message.text) - 1
+        removed = channels.pop(index)
+        bot.reply_to(message, f"✅ Removed channel: {removed['name']}")
+    except:
+        bot.reply_to(message, "❌ Invalid number.")
+
+# Run the bot
+bot.infinity_polling()
 @bot.callback_query_handler(func=lambda call: call.data in ["new_passport", "renew_passport"])
 def passport_service_info(call):
     try:
