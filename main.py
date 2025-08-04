@@ -41,11 +41,11 @@ def handle_start(message):
     not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
 
     if not_joined:
-        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup = InlineKeyboardMarkup(row_width=1)
         for ch in not_joined:
-            btn = types.InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
+            btn = InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
             markup.add(btn)
-        markup.add(types.InlineKeyboardButton("✅ Done", callback_data="go_home"))
+        markup.add(InlineKeyboardButton("✅ Done", callback_data="go_home"))
         bot.send_message(user_id, "🚨 Please join the following channels to continue:", reply_markup=markup)
     else:
         try:
@@ -84,11 +84,11 @@ def go_home_callback(call):
     not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
 
     if not_joined:
-        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup = InlineKeyboardMarkup(row_width=1)
         for ch in not_joined:
-            btn = types.InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
+            btn = InlineKeyboardButton(f"Join {ch['name']}", url=f"https://t.me/{ch['username'][1:]}")
             markup.add(btn)
-        markup.add(types.InlineKeyboardButton("✅ Done", callback_data="go_home"))
+        markup.add(InlineKeyboardButton("✅ Done", callback_data="go_home"))
         bot.send_message(user_id, "🚨 Please join the following channels to continue:", reply_markup=markup)
     else:
         try:
