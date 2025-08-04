@@ -36,6 +36,7 @@ def is_member(channel_username, user_id):
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
+    user_id = message.from_user.id
      # Get channels not yet joined
     not_joined = [ch for ch in channels if not is_member(ch['username'], user_id)]
 
