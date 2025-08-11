@@ -1,13 +1,13 @@
 # utils/decorators.py
 from functools import wraps
-from utils.database import users_col, settings_col
+from utils.database import users, settings_col
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def admin_only(bot):
     def decorator(func):
         @wraps(func)
         def wrapper(call):
-            user = users_col.find_one({"userId": call.from_user.id})
+            user = users.find_one({"userId": call.from_user.id})
             if user and user.get("role") == "admin":
                 return func(call)
             else:

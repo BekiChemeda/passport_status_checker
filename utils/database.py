@@ -13,9 +13,9 @@ try:
 
     print("MONGO_URI:", os.getenv("MONGO_URI"))
 
-    db = client["passport_bot"]
+    db = client["passport"]
 
-    users_col = db["users"]
+    users = db["users"]
     settings_col = db["settings"]
 except Exception as e:
     print("error connecting to db", e)

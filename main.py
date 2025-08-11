@@ -1,14 +1,15 @@
 import telebot
 import os
-from flask import Flask, request
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from handlers import start, check_status, admin
-from utils.database import users_col
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils.database import users_col, settings_col
+from utils.database import users, settings_col
 from utils.decorators import admin_only
 from utils.passport_api import check_by_reference, check_by_fullname
 from dotenv import load_dotenv
+import logging
+import traceback
+from threading import Thread
+from time import sleep
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -16,7 +17,33 @@ bot = telebot.TeleBot(BOT_TOKEN)
 lang = "en"
 
 
+
+# Logging  Configurations
+logging.basicConfig(
+    level=logging.INFO,  # Change to DEBUG for more details
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot.log", encoding='utf-8'),  # log to file
+        logging.StreamHandler()  # also print to console
+    ]
+)
+
+
+
 # app = Flask(__name__)
+admin_states = {}
+def clear_user_session(userId):
+    admin_states.pop(userId, None)
+    
+def is_admin(userId):
+    try:
+        user = users.find_one({"userId": userId})
+        return user and user.get("role") == "admin"
+    except Exception as e:
+        log_exception(e)
+        return False
+def log_exception(e):
+    logging.error("Exception: %s\n%s", str(e), traceback.format_exc())  
 
 
 @bot.message_handler(commands=['start'])
@@ -25,17 +52,17 @@ def handle_start(message):
         bot.delete_message(message.message.chat.id, message.message.message_id)
     except Exception:
         pass
-    user_id = message.from_user.id
-    user = users_col.find_one({"userId": user_id})
+    userId = message.from_user.id
+    user = users.find_one({"userId": userId})
 
     if not user:
-        users_col.insert_one({
-            "userId": user_id,
+        users.insert_one({
+            "userId": userId,
             "first_name": message.from_user.first_name,
             "username": message.from_user.username,
             "role": "user"
         })
-    user = users_col.find_one({"userId": user_id})
+    user = users.find_one({"userId": userId})
 
     settings = settings_col.find_one()
     if settings and settings.get("force_subscription"):
@@ -45,9 +72,9 @@ def handle_start(message):
         for ch in settings.get("channels", []):
             markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
         markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
-        bot.send_message(user_id, text, reply_markup=markup)
+        bot.send_message(userId, text, reply_markup=markup)
         return
-    show_main_menu(bot, user_id, user)
+    show_main_menu(bot, userId, user)
     # print(user)
 
 
@@ -154,7 +181,7 @@ def handle_check_status(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
 
         markup = InlineKeyboardMarkup()
@@ -172,7 +199,7 @@ def get_ref_input(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
         msg = bot.send_message(call.message.chat.id, "🔢 Please send your tracking reference code:\n E.x AAL1234567 ")
         bot.register_next_step_handler(msg, process_tracking_code, lang)
@@ -190,7 +217,7 @@ def get_fullname_input(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    user = users_col.find_one({"userId": call.from_user.id})
+    user = users.find_one({"userId": call.from_user.id})
     lang = user.get("language", "en")
     msg = bot.send_message(call.message.chat.id, "🧑‍🦱 Enter your full name (Name Father Grandfather):")
     bot.register_next_step_handler(msg, ask_branch, lang)
@@ -212,7 +239,7 @@ def ask_branch(msg, lang):
 @bot.callback_query_handler(func=lambda c: c.data.startswith("branch|"))
 def handle_branch_selection(call):
         _, full_name, branch = call.data.split("|", 2)
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
         result = check_by_fullname(full_name, branch, lang)
         bot.send_message(call.message.chat.id, result,parse_mode="MarkdownV2", reply_markup=get_main_menu_button())
@@ -220,7 +247,7 @@ def handle_branch_selection(call):
 
 @bot.message_handler(commands=["channels"])
 def handle_channels_command(message):
-    user = users_col.find_one({"userId": message.from_user.id})
+    user = users.find_one({"userId": message.from_user.id})
     if not user or user.get("role") != "admin":
         return bot.reply_to(message, "⛔️ You are not authorized to use this command.")
 
@@ -301,12 +328,12 @@ def admin_panel(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass  # Ignore if message already deleted or can't delete
-    users_count = users_col.count_documents({})
-    admins_count = users_col.count_documents({"role": "admin"})
+    users_count = users.count_documents({})
+    admins_count = users.count_documents({"role": "admin"})
     lang_counts = {
-        "en": users_col.count_documents({"language": "en"}),
-        "am": users_col.count_documents({"language": "am"}),
-        "om": users_col.count_documents({"language": "om"})
+        "en": users.count_documents({"language": "en"}),
+        "am": users.count_documents({"language": "am"}),
+        "om": users.count_documents({"language": "om"})
     }
 
     text = (
@@ -325,9 +352,10 @@ def admin_panel(call):
     markup = InlineKeyboardMarkup()
     force_btn_text = "Disable Force Subscription" if force_sub else "Enable Force Subscription"
     markup.add(InlineKeyboardButton(force_btn_text, callback_data="toggle_force_sub"))
+    markup.add(InlineKeyboardButton("📢 Broadcast", callback_data="broadcast"))
     markup.add(InlineKeyboardButton("Close", callback_data="close_admin"))
 
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+    bot.send_message(chat_id=call.message.chat.id,
                           text=text, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda c: c.data == "toggle_force_sub")
@@ -348,6 +376,199 @@ def close_admin_panel(call):
     except Exception:
         pass  # Ignore if message already deleted or can't delete
     show_main_menu(bot,call.message.chat.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "broadcast")
+def broadcast_entry(call):
+    clear_user_session(call.from_user.id)
+    if not is_admin(call.from_user.id):
+        return bot.answer_callback_query(call.id, "Access denied.")
+
+    try:
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✍️ Write Post", callback_data="broadcast_write"),
+            InlineKeyboardButton("📢 Forward from Channel", callback_data="broadcast_forward")
+        )
+        bot.send_message(call.message.chat.id, "Choose broadcast method:", reply_markup=markup)
+    except Exception as e:
+        log_exception(e)
+
+@bot.callback_query_handler(func=lambda c: c.data == "broadcast_write")
+def broadcast_write_start(call):
+    admin_states[call.from_user.id] = {"stage": "awaiting_text"}
+    bot.send_message(call.message.chat.id, "✍️ Send the broadcast text:")
+
+@bot.message_handler(func=lambda m: m.chat.type == "private" and admin_states.get(m.from_user.id, {}).get("stage") == "awaiting_text")
+def receive_broadcast_text(message):
+    try:
+        text = message.text.strip()
+        if not text:
+            return bot.send_message(message.chat.id, "❌ Message cannot be empty.")
+        admin_states[message.from_user.id]["text"] = text
+        admin_states[message.from_user.id]["stage"] = "ask_image"
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("📷 Yes, Add Image", callback_data="broadcast_add_image"),
+            InlineKeyboardButton("❌ No, Text Only", callback_data="broadcast_no_image")
+        )
+        bot.send_message(message.chat.id, "Do you want to add an image?", reply_markup=markup)
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(message.chat.id, "❌ Error processing your input.")
+
+@bot.callback_query_handler(func=lambda c: c.data in ["broadcast_add_image", "broadcast_no_image"])
+def broadcast_image_decision(call):
+    try:
+        state = admin_states.get(call.from_user.id)
+        if not state:
+            return bot.answer_callback_query(call.id, "Session expired.")
+        if call.data == "broadcast_add_image":
+            state["stage"] = "awaiting_image"
+            bot.send_message(call.message.chat.id, "📤 Send the image now:")
+        else:
+            state["image"] = None
+            state["stage"] = "confirm"
+            preview_broadcast(call.message.chat.id, call.from_user.id)
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(call.message.chat.id, "❌ Error in image decision step.")
+
+@bot.message_handler(content_types=['photo'], func=lambda m: m.chat.type == "private" and admin_states.get(m.from_user.id, {}).get("stage") == "awaiting_image")
+def receive_broadcast_image(message):
+    try:
+        state = admin_states[message.from_user.id]
+        state["image"] = message.photo[-1].file_id
+        state["stage"] = "confirm"
+        preview_broadcast(message.chat.id, message.from_user.id)
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(message.chat.id, "❌ Error receiving image.")
+
+def preview_broadcast(chat_id, admin_id):
+    try:
+        state = admin_states.get(admin_id)
+        text = state.get("text", "")
+        image = state.get("image")
+
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✅ Confirm & Send", callback_data="broadcast_confirm"),
+            InlineKeyboardButton("❌ Cancel", callback_data="broadcast_cancel")
+        )
+
+        if image:
+            bot.send_photo(chat_id, image, caption=text, reply_markup=markup)
+        else:
+            bot.send_message(chat_id, text, reply_markup=markup)
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(chat_id, "❌ Could not preview broadcast.")
+
+@bot.callback_query_handler(func=lambda c: c.data in ["broadcast_confirm", "broadcast_cancel"])
+def broadcast_confirm_or_cancel(call):
+    try:
+        userId = call.from_user.id
+        chat_id = call.message.chat.id
+        state = admin_states.get(userId)
+        bot.answer_callback_query(call.id)
+
+        if not state:
+            return bot.send_message(chat_id, "⚠️ No active broadcast found.")
+        if call.data == "broadcast_cancel":
+            del admin_states[userId]
+            return bot.send_message(chat_id, "❌ Broadcast cancelled.")
+        bot.send_message(chat_id, "📤 Sending broadcast to all users...")
+        Thread(target=send_broadcast_to_all, args=(userId,)).start()
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(call.message.chat.id, "❌ Broadcast failed.")
+
+def send_broadcast_to_all(admin_id):
+    try:
+        state = admin_states.get(admin_id)
+        if not state:
+            return
+        text = state.get("text", "")
+        image = state.get("image")
+        count, failed = 0, 0
+
+        for user in users.find():
+            uid = user.get("userId")
+            try:
+                if image:
+                    bot.send_photo(uid, image, caption=text)
+                else:
+                    bot.send_message(uid, text)
+                count += 1
+            except Exception as e:
+                failed += 1
+                log_exception(e)
+            sleep(0.07)
+
+        del admin_states[admin_id]
+        bot.send_message(admin_id, f"✅ Broadcast finished.\n\n✅ Sent: {count}\n❌ Failed: {failed}")
+    except Exception as e:
+        log_exception(e)
+
+@bot.callback_query_handler(func=lambda c: c.data == "broadcast_forward")
+def ask_forward_message(call):
+    try:
+        admin_states[call.from_user.id] = {"stage": "awaiting_forward"}
+        bot.send_message(call.message.chat.id, "📨 Forward the message from the channel here:")
+    except Exception as e:
+        log_exception(e)
+
+@bot.message_handler(func=lambda m: m.chat.type == "private" and admin_states.get(m.from_user.id, {}).get("stage") == "awaiting_forward")
+def handle_forwarded_message(message):
+    try:
+        if not message.forward_from_chat:
+            return bot.send_message(message.chat.id, "❌ Please forward a message from a channel.")
+        state = admin_states[message.from_user.id]
+        state["forward_msg_id"] = message.message_id
+        state["chat_id"] = message.chat.id
+        state["stage"] = "confirm_forward"
+
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✅ Confirm & Send", callback_data="broadcast_forward_confirm"),
+            InlineKeyboardButton("❌ Cancel", callback_data="broadcast_cancel")
+        )
+        bot.send_message(message.chat.id, "Forwarded message received. Confirm to broadcast it:", reply_markup=markup)
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(message.chat.id, "❌ Failed to process forwarded message.")
+
+@bot.callback_query_handler(func=lambda c: c.data == "broadcast_forward_confirm")
+def confirm_forwarded_broadcast(call):
+    try:
+        bot.answer_callback_query(call.id)
+        state = admin_states.get(call.from_user.id)
+        if not state:
+            return bot.send_message(call.message.chat.id, "⚠️ No active forward to send.")
+        source_chat_id = state["chat_id"]
+        msg_id = state["forward_msg_id"]
+        bot.send_message(call.message.chat.id, "📤 Broadcasting forwarded message...")
+        Thread(target=send_forwarded_broadcast_to_all, args=(call.from_user.id, source_chat_id, msg_id)).start()
+    except Exception as e:
+        log_exception(e)
+        bot.send_message(call.message.chat.id, "❌ Forwarding failed.")
+
+def send_forwarded_broadcast_to_all(admin_id, source_chat_id, msg_id):
+    try:
+        count, failed = 0, 0
+        for user in users.find():
+            uid = user.get("userId")
+            try:
+                bot.forward_message(uid, source_chat_id, msg_id)
+                count += 1
+            except Exception as e:
+                failed += 1
+                log_exception(e)
+            sleep(0.07)
+        del admin_states[admin_id]
+        bot.send_message(admin_id, f"✅ Forward broadcast done.\n\n✅ Sent: {count}\n❌ Failed: {failed}")
+    except Exception as e:
+        log_exception(e)
 
 bot.remove_webhook()
 
