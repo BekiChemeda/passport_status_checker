@@ -152,25 +152,29 @@ def show_main_menu(bot, chat_id, user=None):
     from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
-        InlineKeyboardButton("✅ Check Status", callback_data="check_status")
+        InlineKeyboardButton("✅ Check Passport Status", callback_data="check_status"),
+        InlineKeyboardButton("ℹ️ About the Bot", callback_data="about")
     )
     markup.add(
-        InlineKeyboardButton("ℹ️ About", callback_data="about"),
-        InlineKeyboardButton("🆘 Help", callback_data="help"),
+        InlineKeyboardButton("🆘 Help & Instructions", callback_data="help"),
+        InlineKeyboardButton("👨‍💻 Developer Info", url="https://t.me/BEK_I")
     )
     markup.add(
         InlineKeyboardButton("🆕 New Passport Registration", callback_data="new_passport"),
-        InlineKeyboardButton("♻️ Passport Renewal", callback_data="renew_passport")
+        InlineKeyboardButton("♻️ Renew Passport", callback_data="renew_passport")
     )
     if user and user.get("role") == "admin":
         markup.add(InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel"))
 
-    bot.send_message(chat_id, f"""👋 Welcome to the Ethiopian Passport Status Bot!
+    welcome_text = (
+        "👋 *Welcome to the Ethiopian Passport Status Bot!*\n\n"
+        "🛂 *Easily check the status of your passport application:*\n\n"
+        "✅ *Tracking Code Method:* Recommended for quick results.\n"
+        "🔍 *Full Name + Branch:* Use if you lost your tracking code.\n\n"
+        "📢 *Stay updated and enjoy our services!*"
+    )
 
-🛂 You can check the status of your passport application using either:
-✅ Your Tracking Code (Recommended)
-🔍 Your Full Name and Branch (if you lost your code)
-""", reply_markup=markup)
+    bot.send_message(chat_id, welcome_text, parse_mode="Markdown", reply_markup=markup)
 def get_main_menu_button():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🏠 Main Menu", callback_data="go_home"))
@@ -371,11 +375,13 @@ def toggle_force_subscription(call):
 @admin_only(bot)
 def close_admin_panel(call):
     try:
+        user = users.find_one({"userId": call.message.chat.id})
+
         # Delete the home message with the buttons
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass  # Ignore if message already deleted or can't delete
-    show_main_menu(bot,call.message.chat.id)
+    show_main_menu(bot,call.message.chat.id,user=user)
 
 @bot.callback_query_handler(func=lambda c: c.data == "broadcast")
 def broadcast_entry(call):
