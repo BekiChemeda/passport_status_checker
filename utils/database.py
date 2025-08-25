@@ -11,7 +11,6 @@ try:
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     client.server_info()
 
-    print("MONGO_URI:", os.getenv("MONGO_URI"))
 
     db = client["passport"]
 
