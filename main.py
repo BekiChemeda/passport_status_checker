@@ -49,9 +49,10 @@ def log_exception(e):
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     try:
-        bot.delete_message(message.message.chat.id, message.message.message_id)
+        bot.delete_message(message.chat.id, message.message_id)
     except Exception:
         pass
+
     userId = message.from_user.id
     user = users.find_one({"userId": userId})
 
@@ -66,14 +67,63 @@ def handle_start(message):
 
     settings = settings_col.find_one()
     if settings and settings.get("force_subscription"):
-        joined_all = True
-        text = "🚫 Please join all channels to use the bot."
+        channels = settings.get("channels", [])
+        if not channels:
+            show_main_menu(bot, userId, user)
+            return
+
+        # Determine which channels the user hasn't joined and show only those
+        missing = []
+        for ch in channels:
+            try:
+                chat_identifier = ch.get("chat_id")
+                if not chat_identifier:
+                    url = ch.get("url", "")
+                    if url.startswith("@"):
+                        chat_identifier = url
+                    elif url.startswith("https://t.me/") or url.startswith("http://t.me/"):
+                        username = url.rstrip('/').split('/')[-1]
+                        chat_identifier = f"@{username}"
+                    else:
+                        chat_identifier = ch.get("name")
+
+                # convert numeric strings
+                if isinstance(chat_identifier, str) and chat_identifier.lstrip('-').isdigit():
+                    try:
+                        chat_identifier = int(chat_identifier)
+                    except Exception:
+                        pass
+
+                member = bot.get_chat_member(chat_identifier, userId)
+                if member.status not in ["member", "administrator", "creator"]:
+                    missing.append(ch)
+            except telebot.apihelper.ApiTelegramException as e:
+                # if bot can't access the channel, treat as missing (user must join / admin should fix)
+                missing.append(ch)
+            except Exception:
+                missing.append(ch)
+
+        if not missing:
+            show_main_menu(bot, userId, user)
+            return
+
+        text = "🚫 Please join the channels below to use the bot."
         markup = InlineKeyboardMarkup()
-        for ch in settings.get("channels", []):
-            markup.add(InlineKeyboardButton(ch["name"], url=ch["url"]))
+        for ch in missing:
+            url = ch.get("url")
+            if url:
+                if url.startswith("@"):
+                    link = f"https://t.me/{url.lstrip('@')}"
+                elif url.startswith("http"):
+                    link = url
+                else:
+                    link = None
+                if link:
+                    markup.add(InlineKeyboardButton(ch["name"], url=link))
         markup.add(InlineKeyboardButton("✅ Joined", callback_data="check_sub"))
         bot.send_message(userId, text, reply_markup=markup)
         return
+
     show_main_menu(bot, userId, user)
     # print(user)
 
@@ -84,7 +134,8 @@ def go_home_callback(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    show_main_menu(bot, call.message.chat.id)
+    user = users.find_one({"userId": call.from_user.id})
+    show_main_menu(bot, call.message.chat.id, user)
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ["new_passport", "renew_passport"])
@@ -306,15 +357,34 @@ def prompt_add_channel(call):
     bot.register_next_step_handler(msg, add_channel_step)
 
 def add_channel_step(message):
-    if "-" not in message.text:
-        return bot.reply_to(message, "❗ Invalid format. Use: `ChannelName - https://t.me/yourchannel`",
-                            parse_mode="Markdown")
-
     try:
-        name, url = [x.strip() for x in message.text.split("-", 1)]
+        input_text = message.text.strip()
+        if "-" not in input_text:
+            return bot.reply_to(message, "❗ Invalid format. Use: `ChannelName - @username`", parse_mode="Markdown")
+
+        name, identifier = [x.strip() for x in input_text.split("-", 1)]
+
+        # Normalize and require @username (admins will add channels using @username)
+        if identifier.startswith("@"):
+            username = identifier
+        elif "t.me" in identifier:
+            username = "@" + identifier.rstrip('/').split('/')[-1]
+        else:
+            return bot.reply_to(message, "❗ Invalid identifier. Provide a public @username or https://t.me/username", parse_mode="Markdown")
+
+        # Verify bot can access the channel using @username
+        try:
+            bot.get_chat(username)
+        except telebot.apihelper.ApiTelegramException as e:
+            # common cause: bot not added or wrong username
+            if "chat not found" in str(e).lower() or (hasattr(e, 'description') and e.description == "Bad Request: chat not found"):
+                return bot.reply_to(message, "❌ Failed to verify channel access. Ensure the bot is added to the channel as an admin and that you used the correct @username.")
+            return bot.reply_to(message, f"❌ Unexpected error: {e}")
+
         settings = settings_col.find_one({"_id": "global_settings"}) or {}
         channels = settings.get("channels", [])
-        channels.append({"name": name, "url": url})
+        # Store the username (leading @) in the url field for backward compatibility
+        channels.append({"name": name, "url": username})
 
         settings_col.update_one(
             {"_id": "global_settings"},
@@ -323,7 +393,117 @@ def add_channel_step(message):
         )
         bot.reply_to(message, f"✅ Added channel: {name}")
     except Exception as e:
+        log_exception(e)
         bot.reply_to(message, f"❌ Failed to add channel. Error: {e}")
+        try:
+            input_text = message.text.strip()
+            if "-" not in input_text:
+                return bot.reply_to(message, "\u2757 Invalid format. Use: `ChannelName - @username` or `ChannelName - https://t.me/yourchannel`", parse_mode="Markdown")
+
+            name, identifier = [x.strip() for x in input_text.split("-", 1)]
+
+            # Basic validation
+            if not (identifier.startswith("@") or identifier.startswith("http")):
+                return bot.reply_to(message, "\u2757 Invalid identifier. Use @username or a valid https://t.me/ link.", parse_mode="Markdown")
+
+            # Normalize identifier and try to resolve chat info
+            username_part = None
+            chat_id = None
+
+            if identifier.startswith("@"):
+                username_part = identifier[1:]
+            elif "t.me" in identifier:
+                username_part = identifier.rstrip('/').split('/')[-1]
+
+            # If the last segment looks like an invite code (starts with +) we cannot resolve it with get_chat.
+            if username_part and username_part.startswith('+'):
+                # Private channel invite link - instruct admin to forward a message
+                admin_states[message.from_user.id] = {"stage": "awaiting_channel_forward", "pending_name": name}
+                return bot.reply_to(message, (
+                    "\u26a0\ufe0f This looks like a private invite link.\n"
+                    "Please add the bot to the channel as an admin. Then forward any message from the channel to me so I can register it, or provide the public @username if available."
+                ))
+
+            # Try to get chat and its id for future checks
+            if username_part:
+                try:
+                    # Prefer using @username when calling get_chat
+                    chat_obj = bot.get_chat(f"@{username_part}")
+                    chat_id = chat_obj.id
+                    # verify bot is a member/admin in that chat
+                    me = bot.get_me()
+                    try:
+                        bot_member = bot.get_chat_member(chat_id, me.id)
+                        if bot_member.status in ["left", "kicked"]:
+                            return bot.reply_to(message, "\u274c I am not a member of that channel. Please add the bot as an admin and try again.")
+                    except Exception:
+                        # get_chat_member may fail for some chats; continue but warn
+                        pass
+                except telebot.apihelper.ApiTelegramException as e:
+                    # give a helpful message
+                    if "chat not found" in str(e).lower() or e.description == "Bad Request: chat not found":
+                        return bot.reply_to(message, "\u274c Failed to verify channel access. Ensure the bot is added to the channel as an admin and that you used the correct public @username.")
+                    else:
+                        return bot.reply_to(message, f"\u274c Unexpected error: {e}")
+
+            # Persist the channel. Store both the human name and the resolved chat_id (if available) and url (for display)
+            settings = settings_col.find_one({"_id": "global_settings"}) or {}
+            channels = settings.get("channels", [])
+            channel_record = {"name": name}
+            if chat_id:
+                channel_record["chat_id"] = chat_id
+            if username_part:
+                channel_record["url"] = f"https://t.me/{username_part}"
+            else:
+                channel_record["url"] = identifier
+
+            channels.append(channel_record)
+
+            settings_col.update_one(
+                {"_id": "global_settings"},
+                {"$set": {"channels": channels}},
+                upsert=True
+            )
+            bot.reply_to(message, f"\u2705 Added channel: {name}")
+        except Exception as e:
+            log_exception(e)
+            bot.reply_to(message, f"\u274c Failed to add channel. Error: {e}")
+
+
+    @bot.message_handler(func=lambda m: m.chat.type == "private" and admin_states.get(m.from_user.id, {}).get("stage") == "awaiting_channel_forward")
+    def register_channel_from_forward(message):
+        """When an admin forwards a message from a private channel, capture the channel id and save it."""
+        try:
+            state = admin_states.get(message.from_user.id)
+            if not state:
+                return
+            if not message.forward_from_chat:
+                return bot.reply_to(message, "\u274c Please forward a message from the channel (not send a link).")
+
+            ch = message.forward_from_chat
+            channel_id = ch.id
+            name = state.get("pending_name") or (ch.title if hasattr(ch, 'title') else 'Channel')
+
+            settings = settings_col.find_one({"_id": "global_settings"}) or {}
+            channels = settings.get("channels", [])
+            # Avoid duplicates by chat_id
+            for existing in channels:
+                if existing.get("chat_id") == channel_id:
+                    del admin_states[message.from_user.id]
+                    return bot.reply_to(message, f"\u2705 Channel already registered: {existing.get('name')}")
+
+            channel_record = {"name": name, "chat_id": channel_id}
+            # If forward_from_chat has username we can store a url for convenience
+            if getattr(ch, 'username', None):
+                channel_record["url"] = f"https://t.me/{ch.username}"
+
+            channels.append(channel_record)
+            settings_col.update_one({"_id": "global_settings"}, {"$set": {"channels": channels}}, upsert=True)
+            del admin_states[message.from_user.id]
+            bot.reply_to(message, f"\u2705 Registered channel: {name}")
+        except Exception as e:
+            log_exception(e)
+            bot.reply_to(message, f"\u274c Failed to register channel from forwarded message: {e}")
 @bot.callback_query_handler(func=lambda c: c.data == "admin_panel")
 @admin_only(bot)
 def admin_panel(call):
@@ -601,10 +781,45 @@ def check_subscription(call):
         joined_all = True
         for channel in channels:
             try:
-                member = bot.get_chat_member(channel["url"].split('/')[-1], user_id)
+                # Prefer stored chat_id if available
+                chat_identifier = channel.get("chat_id")
+
+                if not chat_identifier:
+                    # Fallback to parsing url or username and use @username format
+                    url = channel.get("url", "")
+                    if url.startswith("https://t.me/") or url.startswith("http://t.me/"):
+                        username = url.rstrip('/').split('/')[-1]
+                        # if it's an invite token (like joinchat/XYZ or starts with +) we cannot resolve
+                        if username.startswith("joinchat") or username.startswith("+"):
+                            bot.answer_callback_query(call.id, "⚠️ A required channel is private and cannot be checked by username. Please ask an admin to add the bot to that channel and register it by forwarding a channel message.")
+                            return
+                        chat_identifier = f"@{username}"
+                    elif url.startswith("@"):
+                        chat_identifier = url
+                    else:
+                        # last-resort: use whatever is stored
+                        chat_identifier = url
+
+                # If chat_identifier looks numeric, convert to int
+                try:
+                    if isinstance(chat_identifier, str) and chat_identifier.lstrip('-').isdigit():
+                        chat_identifier = int(chat_identifier)
+                except Exception:
+                    pass
+
+                member = bot.get_chat_member(chat_identifier, user_id)
                 if member.status not in ["member", "administrator", "creator"]:
                     joined_all = False
                     break
+            except telebot.apihelper.ApiTelegramException as e:
+                # If the bot cannot access the channel or it's misconfigured, inform admin/user
+                log_exception(e)
+                # common error: chat not found -> bot not added or bad username
+                if "chat not found" in str(e).lower() or (hasattr(e, 'description') and e.description == "Bad Request: chat not found"):
+                    bot.answer_callback_query(call.id, "⚠️ One of the required channels is not reachable. Please ask an admin to ensure the bot is added to the channel and that the channel's public @username is correct.")
+                    return
+                joined_all = False
+                break
             except Exception as e:
                 log_exception(e)
                 joined_all = False
@@ -612,7 +827,8 @@ def check_subscription(call):
 
         if joined_all:
             bot.answer_callback_query(call.id, "✅ You have joined all required channels.")
-            show_main_menu(bot, call.message.chat.id)
+            user = users.find_one({"userId": call.from_user.id})
+            show_main_menu(bot, call.message.chat.id, user)
         else:
             bot.answer_callback_query(call.id, "❌ Please join all required channels.")
     except Exception as e:
