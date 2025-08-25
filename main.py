@@ -120,7 +120,7 @@ def help_inline(call):
         "`Full Name:` ABEBE KEBEDE HAILE\n"
         "`Branch:` ICS Saris Adey Abeba Branch\n"
         "Follow: *Check Status* → *Full Name Method* → Enter name and select branch.\n\n"
-        "For any issues, contact [@BYTECODE](https://t.me/BYTE_CODE_SUPPORT_BOT)"
+        "For any issues, contact [@BEK_I](https://t.me/BEK_I)"
     )
     from handlers.start import get_main_menu_button
     bot.send_message(call.message.chat.id, text, parse_mode="Markdown", reply_markup=get_main_menu_button())
