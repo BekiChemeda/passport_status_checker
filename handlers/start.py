@@ -1,5 +1,5 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from utils.database import users_col, settings_col
+from utils.database import users, settings_col
 from utils.languages import tr
 
 def register_handlers(bot):
@@ -11,16 +11,16 @@ def register_handlers(bot):
         except Exception:
             pass
         user_id = message.from_user.id
-        user = users_col.find_one({"userId": user_id})
+        user = users.find_one({"userId": user_id})
 
         if not user:
-            users_col.insert_one({
+            users.insert_one({
                 "userId": user_id,
                 "first_name": message.from_user.first_name,
                 "username": message.from_user.username,
                 "role": "user"
             })
-        user = users_col.find_one({"userId": user_id})
+        user = users.find_one({"userId": user_id})
 
         settings = settings_col.find_one()
         if settings and settings.get("force_subscription"):

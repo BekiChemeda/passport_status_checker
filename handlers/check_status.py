@@ -1,7 +1,7 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from handlers.start import get_main_menu_button
-from utils.database import users_col
+from utils.database import users
 from utils.passport_api import check_by_reference, check_by_fullname
 
 def register_handlers(bot):
@@ -12,7 +12,7 @@ def register_handlers(bot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
 
         markup = InlineKeyboardMarkup()
@@ -30,7 +30,7 @@ def register_handlers(bot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
         msg = bot.send_message(call.message.chat.id, "🔢 Please send your tracking reference code:")
         bot.register_next_step_handler(msg, process_tracking_code, lang)
@@ -48,7 +48,7 @@ def register_handlers(bot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
         msg = bot.send_message(call.message.chat.id, "🧑‍🦱 Enter your full name (Name Father Grandfather):")
         bot.register_next_step_handler(msg, ask_branch, lang)
@@ -70,7 +70,7 @@ def register_handlers(bot):
     @bot.callback_query_handler(func=lambda c: c.data.startswith("branch|"))
     def handle_branch_selection(call):
         _, full_name, branch = call.data.split("|", 2)
-        user = users_col.find_one({"userId": call.from_user.id})
+        user = users.find_one({"userId": call.from_user.id})
         lang = user.get("language", "en")
         result = check_by_fullname(full_name, branch, lang)
         bot.send_message(call.message.chat.id, result,parse_mode="MarkdownV2", reply_markup=get_main_menu_button())

@@ -2,13 +2,13 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from handlers.start import show_main_menu
-from utils.database import users_col, settings_col
+from utils.database import users, settings_col
 from utils.decorators import admin_only
 
 def register_handlers(bot):
     @bot.message_handler(commands=["channels"])
     def handle_channels_command(message):
-        user = users_col.find_one({"userId": message.from_user.id})
+        user = users.find_one({"userId": message.from_user.id})
         if not user or user.get("role") != "admin":
             return bot.reply_to(message, "⛔️ You are not authorized to use this command.")
 
@@ -89,12 +89,12 @@ def register_handlers(bot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass  # Ignore if message already deleted or can't delete
-        users_count = users_col.count_documents({})
-        admins_count = users_col.count_documents({"role": "admin"})
+        users_count = users.count_documents({})
+        admins_count = users.count_documents({"role": "admin"})
         lang_counts = {
-            "en": users_col.count_documents({"language": "en"}),
-            "am": users_col.count_documents({"language": "am"}),
-            "om": users_col.count_documents({"language": "om"})
+            "en": users.count_documents({"language": "en"}),
+            "am": users.count_documents({"language": "am"}),
+            "om": users.count_documents({"language": "om"})
         }
 
         text = (
