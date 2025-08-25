@@ -365,11 +365,23 @@ def admin_panel(call):
 @bot.callback_query_handler(func=lambda c: c.data == "toggle_force_sub")
 @admin_only(bot)
 def toggle_force_subscription(call):
-    settings = settings_col.find_one() or {}
-    force_sub = settings.get("force_subscription", False)
-    settings_col.update_one({}, {"$set": {"force_subscription": not force_sub}}, upsert=True)
-    bot.answer_callback_query(call.id, "✅ Force subscription toggled.")
-    admin_panel(call)
+    try:
+        settings = settings_col.find_one({"_id": "global_settings"}) or {}
+        force_sub = settings.get("force_subscription", False)
+        new_force_sub = not force_sub
+
+        settings_col.update_one(
+            {"_id": "global_settings"},
+            {"$set": {"force_subscription": new_force_sub}},
+            upsert=True
+        )
+
+        status = "enabled" if new_force_sub else "disabled"
+        bot.answer_callback_query(call.id, f"✅ Force subscription {status}.")
+        admin_panel(call)
+    except Exception as e:
+        log_exception(e)
+        bot.answer_callback_query(call.id, "❌ Failed to toggle force subscription.")
 
 @bot.callback_query_handler(func=lambda c: c.data == "close_admin")
 @admin_only(bot)
@@ -575,7 +587,37 @@ def send_forwarded_broadcast_to_all(admin_id, source_chat_id, msg_id):
         bot.send_message(admin_id, f"✅ Forward broadcast done.\n\n✅ Sent: {count}\n❌ Failed: {failed}")
     except Exception as e:
         log_exception(e)
+@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+def check_subscription(call):
+    try:
+        user_id = call.from_user.id
+        settings = settings_col.find_one({"_id": "global_settings"}) or {}
+        channels = settings.get("channels", [])
 
+        if not channels:
+            bot.answer_callback_query(call.id, "❌ No channels configured for subscription.")
+            return
+
+        joined_all = True
+        for channel in channels:
+            try:
+                member = bot.get_chat_member(channel["url"].split('/')[-1], user_id)
+                if member.status not in ["member", "administrator", "creator"]:
+                    joined_all = False
+                    break
+            except Exception as e:
+                log_exception(e)
+                joined_all = False
+                break
+
+        if joined_all:
+            bot.answer_callback_query(call.id, "✅ You have joined all required channels.")
+            show_main_menu(bot, call.message.chat.id)
+        else:
+            bot.answer_callback_query(call.id, "❌ Please join all required channels.")
+    except Exception as e:
+        log_exception(e)
+        bot.answer_callback_query(call.id, "❌ Failed to verify subscription.")
 bot.remove_webhook()
 
 print("Bot running...")
